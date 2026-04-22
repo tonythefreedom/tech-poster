@@ -1,0 +1,6 @@
+[submodule "auto-poster"]
+	path = auto-poster
+	url = https://github.com/kr-ai-dev-association/auto-poster.git
+[submodule "tech-blog"]
+	path = tech-blog
+	url = https://github.com/kr-ai-dev-association/tech-blog.git

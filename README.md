@@ -30,7 +30,7 @@ tech-poster/
 - AI HTML 문서 편집기 + AI 프레젠테이션 생성 웹앱 (`web/`, React 19 + Firebase + Gemini 3-모델 파이프라인)
 - DOCX/HWP 임포트, AI 문서 수정, AI 슬라이드 편집, 차트 렌더링, PNG/PDF/DOCX 내보내기
 - 부속 도구: Google Docs Apps Script (`Code.gs`), HTML→PNG 캡처기 (`html_to_png.py`)
-- **tech-blog 게시 기능** — 한글 HTML을 영문 자동 번역 후 `banya-official-news`에 게시 (super_admin 전용, Cloud Function `publishToTechBlog`)
+- **tech-blog 게시 기능** — 한글 HTML을 영문 자동 번역 후 `static-wiki` 컬렉션에 게시 + tech-blog의 `deploy-seo` 워크플로우 자동 트리거 (super_admin 전용, Cloud Function `publishToTechBlog`)
 - upstream: `tonythefreedom/gdoc-fixer`
 
 ## 파이프라인 흐름
@@ -58,8 +58,12 @@ tech-poster/
         ② Gemini 2.5 Pro로 한→영 번역
         ③ Gemini 2.5 Flash로 메타 추출 (titles, slug, excerpt)
         ④ Secondary Admin SDK(tonys-tech-note service account)
-      ↓ tonys-tech-note Firestore (banya-official-news 컬렉션)
-[tech-blog] https://tony.banya.ai/news/{id} 즉시 반영
+        ⑤ GitHub repository_dispatch (event_type: deploy-seo)
+      ↓ tonys-tech-note Firestore (static-wiki 컬렉션)
+[tech-blog] https://tony.banya.ai/report/{id} 즉시 노출 (Home의 위키 문서 최상위 latest)
+      ↓ deploy-seo 워크플로우 자동 실행 (~3-5분)
+      ↓ /dist/report/{id}/index.html 생성 (OG 메타 포함)
+[tech-blog Hosting] Slack/LinkedIn 미리보기 정상 동작
 ```
 
 ## 서브모듈 통합 메커니즘
@@ -68,7 +72,8 @@ tech-poster/
 |----------|--------|------|
 | `auto-poster` → `tech-blog` | Firestore (`static-wiki`, `banya-official-news`) | 코드 직접 의존 없음 |
 | `auto-poster` → `tech-blog` | GitHub API (`youtube_poster/deploy_seo.py`) | SEO 재빌드 트리거 |
-| `gdoc-fixer` → `tech-blog` | Firestore (`banya-official-news`) | 크로스 프로젝트, service account 인증 |
+| `gdoc-fixer` → `tech-blog` | Firestore (`static-wiki`) | 크로스 프로젝트, service account 인증 |
+| `gdoc-fixer` → `tech-blog` | GitHub repository_dispatch (`deploy-seo`) | 게시 직후 SEO 자동 빌드 |
 
 세 서브모듈은 모두 **데이터 결합도(Firestore 매개)** 만 가지며 코드 레벨 의존이 없어 독립적으로 배포·릴리스됩니다.
 
@@ -102,16 +107,20 @@ git commit -m "chore: bump auto-poster submodule"
 
 ## gdoc-fixer publish 기능 배포 (참고)
 
-`gdoc-fixer/web/functions/publishToTechBlog.js` 가 동작하려면 다음 시크릿이 필요합니다:
+`gdoc-fixer/web/functions/publishToTechBlog.js` 가 동작하려면 다음 시크릿 3개가 필요합니다:
 
 | Secret | 값 |
 |--------|---|
 | `GEMINI_API_KEY` | Google Gemini API 키 (서버 사이드용) |
 | `TECH_BLOG_SERVICE_ACCOUNT` | tonys-tech-note GCP service account JSON 전체 (Cloud Datastore User 권한 필요) |
+| `GITHUB_DISPATCH_TOKEN` | `kr-ai-dev-association/tech-blog` 의 `Contents: write` 권한 PAT (deploy-seo 워크플로우 자동 트리거용) |
 
 ```bash
 cd gdoc-fixer/web
 firebase functions:secrets:set GEMINI_API_KEY
 firebase functions:secrets:set TECH_BLOG_SERVICE_ACCOUNT
+firebase functions:secrets:set GITHUB_DISPATCH_TOKEN
 firebase deploy --only functions:publishToTechBlog,hosting
 ```
+
+> tech-blog의 `deploy-seo.yml` 워크플로우는 `repository_dispatch types: [deploy-seo]` 를 받도록 이미 설정되어 있으며, gdoc-fixer 측 변경만으로 자동 빌드가 트리거됩니다 (tech-blog 코드 변경 불필요, Blaze 요금제 불필요).

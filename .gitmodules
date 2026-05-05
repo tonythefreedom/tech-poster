@@ -4,3 +4,6 @@
 [submodule "tech-blog"]
 	path = tech-blog
 	url = https://github.com/kr-ai-dev-association/tech-blog.git
+[submodule "gdoc-fixer"]
+	path = gdoc-fixer
+	url = https://github.com/tonythefreedom/gdoc-fixer.git

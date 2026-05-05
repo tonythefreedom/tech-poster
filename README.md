@@ -1,13 +1,14 @@
 # tech-poster
 
-반야 AI 콘텐츠 파이프라인 통합 워크스페이스입니다. `auto-poster`와 `tech-blog` 두 프로젝트를 Git 서브모듈로 묶어 한 작업 환경에서 관리할 수 있도록 구성했습니다.
+반야 AI 콘텐츠 파이프라인 통합 워크스페이스입니다. `auto-poster`, `tech-blog`, `gdoc-fixer` 세 프로젝트를 Git 서브모듈로 묶어 한 작업 환경에서 관리합니다.
 
 ## 구성
 
 ```
 tech-poster/
-├── auto-poster/     # 콘텐츠 생성 및 멀티 플랫폼 포스팅 오케스트레이터
-└── tech-blog/       # Firebase Hosting 기반 기술 블로그 (https://tony.banya.ai)
+├── auto-poster/    # 콘텐츠 생성 + 멀티 채널 포스팅 오케스트레이터
+├── tech-blog/      # Firebase Hosting 기반 기술 블로그 (https://tony.banya.ai)
+└── gdoc-fixer/     # AI HTML 문서 편집 + 프레젠테이션 생성 웹앱 (+ 부속 도구)
 ```
 
 ### auto-poster
@@ -16,29 +17,60 @@ tech-poster/
 - LinkedIn, YouTube, Slack 등 멀티 채널 포스팅
 - FastAPI 기반 웹 앱 (`web_app/`)
 - Android 앱 (`android/`)
+- upstream: `kr-ai-dev-association/auto-poster`
 
 ### tech-blog
-- React + Vite 기반 프론트엔드
-- Firestore 실시간 콘텐츠 조회
+- React 19 + Vite 기반 프론트엔드
+- Firestore 실시간 콘텐츠 조회 (`static-wiki`, `banya-official-news` 컬렉션)
 - SEO 페이지 자동 생성 및 Firebase Hosting 배포
 - GitHub Actions로 6시간 주기 자동 배포
+- upstream: `kr-ai-dev-association/tech-blog`
+
+### gdoc-fixer
+- AI HTML 문서 편집기 + AI 프레젠테이션 생성 웹앱 (`web/`, React 19 + Firebase + Gemini 3-모델 파이프라인)
+- DOCX/HWP 임포트, AI 문서 수정, AI 슬라이드 편집, 차트 렌더링, PNG/PDF/DOCX 내보내기
+- 부속 도구: Google Docs Apps Script (`Code.gs`), HTML→PNG 캡처기 (`html_to_png.py`)
+- **tech-blog 게시 기능** — 한글 HTML을 영문 자동 번역 후 `banya-official-news`에 게시 (super_admin 전용, Cloud Function `publishToTechBlog`)
+- upstream: `tonythefreedom/gdoc-fixer`
 
 ## 파이프라인 흐름
 
+콘텐츠를 `tech-blog`로 흘려보내는 두 가지 경로가 있습니다.
+
+### 경로 A — auto-poster 자동 파이프라인
+
 ```
 [auto-poster] MD 작성
-      ↓
-[auto-poster] Gemini로 HTML 변환
-      ↓
-[Firebase Storage] 이미지 업로드
-[Firestore]        HTML 저장 (static-wiki, banya-official-news)
-      ↓
-[tech-blog]  실시간 조회 + SEO 페이지 빌드
-      ↓
-[Firebase Hosting] https://tony.banya.ai 배포
-      ↓
-[auto-poster] LinkedIn/기타 채널 포스팅
+      ↓ Gemini로 HTML 변환
+      ↓ Firebase Storage(이미지) + Firestore(static-wiki / banya-official-news)
+[tech-blog] 실시간 조회 + SEO 페이지 빌드 (GitHub Actions, 6h 주기)
+      ↓ Firebase Hosting → https://tony.banya.ai
+[auto-poster] LinkedIn / YouTube / Slack 멀티채널 포스팅
 ```
+
+### 경로 B — gdoc-fixer 수동 게시 (super_admin)
+
+```
+[gdoc-fixer/web] HTML 문서 편집
+      ↓ "tech-blog 게시" 버튼 (super_admin)
+      ↓ Cloud Function publishToTechBlog
+        ① 권한 검증 (userProfiles.role === 'super_admin')
+        ② Gemini 2.5 Pro로 한→영 번역
+        ③ Gemini 2.5 Flash로 메타 추출 (titles, slug, excerpt)
+        ④ Secondary Admin SDK(tonys-tech-note service account)
+      ↓ tonys-tech-note Firestore (banya-official-news 컬렉션)
+[tech-blog] https://tony.banya.ai/news/{id} 즉시 반영
+```
+
+## 서브모듈 통합 메커니즘
+
+| 결합 형태 | 매개체 | 비고 |
+|----------|--------|------|
+| `auto-poster` → `tech-blog` | Firestore (`static-wiki`, `banya-official-news`) | 코드 직접 의존 없음 |
+| `auto-poster` → `tech-blog` | GitHub API (`youtube_poster/deploy_seo.py`) | SEO 재빌드 트리거 |
+| `gdoc-fixer` → `tech-blog` | Firestore (`banya-official-news`) | 크로스 프로젝트, service account 인증 |
+
+세 서브모듈은 모두 **데이터 결합도(Firestore 매개)** 만 가지며 코드 레벨 의존이 없어 독립적으로 배포·릴리스됩니다.
 
 ## 클론
 
@@ -53,6 +85,8 @@ git clone --recurse-submodules https://github.com/tonythefreedom/tech-poster.git
 git submodule update --init --recursive
 ```
 
+> macOS 사용자 주의: `gdoc-fixer` upstream에 `README.md`/`readme.md` 두 파일이 분리 트래킹되어 있어, case-insensitive 파일시스템(APFS 기본)에서는 git status에 `README.md modified` 가 상시 표시될 수 있습니다. 무해한 잔존 상태이며 작업에 영향이 없습니다.
+
 ## 서브모듈 최신화
 
 ```bash
@@ -64,4 +98,20 @@ git submodule update --remote --merge
 cd auto-poster && git pull origin main && cd ..
 git add auto-poster
 git commit -m "chore: bump auto-poster submodule"
+```
+
+## gdoc-fixer publish 기능 배포 (참고)
+
+`gdoc-fixer/web/functions/publishToTechBlog.js` 가 동작하려면 다음 시크릿이 필요합니다:
+
+| Secret | 값 |
+|--------|---|
+| `GEMINI_API_KEY` | Google Gemini API 키 (서버 사이드용) |
+| `TECH_BLOG_SERVICE_ACCOUNT` | tonys-tech-note GCP service account JSON 전체 (Cloud Datastore User 권한 필요) |
+
+```bash
+cd gdoc-fixer/web
+firebase functions:secrets:set GEMINI_API_KEY
+firebase functions:secrets:set TECH_BLOG_SERVICE_ACCOUNT
+firebase deploy --only functions:publishToTechBlog,hosting
 ```

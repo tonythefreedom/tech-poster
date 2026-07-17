@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 저장소 개요
 
-`tech-poster`는 반야 AI 콘텐츠 파이프라인의 **통합 워크스페이스**입니다. 실제 코드는 전부 세 개의 Git 서브모듈 안에 있으며 이 최상위 저장소에는 의미 있는 소스가 없습니다.
+`tech-poster`는 반야 AI 콘텐츠 파이프라인의 **통합 워크스페이스**입니다. 실제 코드는 전부 네 개의 Git 서브모듈 안에 있으며 이 최상위 저장소에는 의미 있는 소스가 없습니다.
 
 ```
 tech-poster/                # 빈 래퍼 저장소 (서브모듈 포인터만 보유)
 ├── auto-poster/    ←  submodule: kr-ai-dev-association/auto-poster
 ├── tech-blog/      ←  submodule: kr-ai-dev-association/tech-blog
-└── gdoc-fixer/     ←  submodule: tonythefreedom/gdoc-fixer  (다른 owner!)
+├── gdoc-fixer/     ←  submodule: tonythefreedom/gdoc-fixer  (다른 owner!)
+└── aidev-home/     ←  submodule: kr-ai-dev-association/aidev-home  (커뮤니티: dev.prototypebench.org)
 ```
 
-**참고**: `gdoc-fixer`만 owner가 다릅니다(`tonythefreedom` 개인 계정). 클론/push 권한 설정이 다른 두 개와 별개라는 점에 주의하세요.
+**참고**: `gdoc-fixer`만 owner가 다릅니다(`tonythefreedom` 개인 계정). 클론/push 권한 설정이 다른 셋과 별개라는 점에 주의하세요. 이 환경에서는 SSH 키가 없어 서브모듈 리모트는 모두 **HTTPS**로 접근합니다(SSH `git@github.com` push는 거부됨).
 
 작업할 때 항상 이 구조를 먼저 확인하세요. 파일을 수정하려면 해당 서브모듈 디렉터리로 들어가야 하며, 각 서브모듈은 **독립적인 git 저장소**입니다(다른 리모트, 다른 브랜치). 최상위에서 `git status`를 실행하면 서브모듈 자체의 파일 변경은 보이지 않고, 오직 서브모듈 포인터(커밋 해시) 변경만 감지됩니다.
 
@@ -93,6 +94,13 @@ cd .. && git add auto-poster && git commit -m "chore: bump auto-poster submodule
   - `upload_wiki.py` — **Python** 스크립트. Firebase Admin SDK로 HTML + 이미지 쌍을 Firestore/Storage에 한 번에 올리고 옵션으로 GitHub Actions까지 트리거.
   - `trigger-github-deploy.{py,sh}` — 외부 시스템에서 Firestore에 저장한 뒤 배포 워크플로우를 수동 트리거할 때 사용.
 - **`.github/workflows/`**: `deploy-seo.yml`(수동 트리거 또는 6시간마다 자동 배포), `generate-sitemap.yml`(일 1회 sitemap.xml 갱신).
+
+### aidev-home (React + Vite — 한국인공지능개발자 협동조합 홈, `dev.prototypebench.org`)
+
+- 협동조합 홈페이지 + **커뮤니티 게시판**. Vite/React SPA(Tailwind 미사용, 자체 `src/App.css`).
+- **`src/components/CommunityPage.jsx`** / **`TopicDetailPage.jsx`**: 커뮤니티 목록·상세. 게시글 본문은 `.post-content` 안에 `dangerouslySetInnerHTML`로 렌더하되 **`src/lib/html.js`의 `sanitize()`(DOMPurify)를 거침** — `USE_PROFILES:{html:true}` + inline `style` 허용이지만 **`<style>`/`<script>` 태그는 제거**, `position:fixed/absolute` · `z-index`도 제거.
+- gdoc-fixer의 `publishToCommunity` Cloud Function이 aidev-home의 Edge Function(`external-post`)으로 문서를 전달해 커뮤니티에 게시됨.
+- **연쇄 게시 시 렌더 계약**: Tailwind가 없고 `<style>`이 제거되므로, 게시되는 다이어그램/도형은 **인라인 `style=""`만** 안전하게 살아남는다(클래스·`<style>`·CDN 스크립트는 전부 무효). gdoc-fixer가 다이어그램을 인라인 스타일 HTML로 생성하는 이유.
 
 ## 자주 쓰는 명령어
 

@@ -7,3 +7,6 @@
 [submodule "gdoc-fixer"]
 	path = gdoc-fixer
 	url = https://github.com/tonythefreedom/gdoc-fixer.git
+[submodule "aidev-home"]
+	path = aidev-home
+	url = https://github.com/kr-ai-dev-association/aidev-home.git
